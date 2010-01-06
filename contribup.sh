@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Author Vitaliy Okulov
-# Email vitaliy.okulov@gmail.com
+# Email admin@vokulov.ru
 # Скрипт обновляет ядро проекта на базе CMS Drupal
 
 
