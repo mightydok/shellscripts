@@ -1,9 +1,10 @@
 #!/bin/bash
 
+# Script perform consistency checks on replicated MySQL databases
 # Version: 0.2
 #
 ## v0.2 by (c) Vitaliy Okulov - 2010 - www.vokulov.ru 
-# * Добавлена поддержка MYSQL_PORT и MYSQL_SOCKET
+# * Добавлена поддержка MYSQL_PORT и MYSQL_SOCKET как аргументов к скрипту
 # * Реализован функционал исключений slave серверов из проверки
 # * Добавлена поддержка 2-х дополнительных аргументов и проверка их наличия
 #
