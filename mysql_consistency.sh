@@ -1,9 +1,12 @@
 #!/bin/bash
 
 # Script perform consistency checks on replicated MySQL databases
-# Version: 0.2
+# Version: 0.3
 #
-## v0.2 by (c) Vitaliy Okulov - 2010 - www.vokulov.ru 
+# v0.3 by (c) Vitaliy Okulov - 10.01.2010 - www.vokulov.ru 
+# * Добавлена поддержка системы монитринга Nagios с помощью демона NSCA.
+#
+# v0.2 by (c) Vitaliy Okulov - 2010 - www.vokulov.ru 
 # * Добавлена поддержка MYSQL_PORT и MYSQL_SOCKET как аргументов к скрипту
 # * Реализован функционал исключений slave серверов из проверки
 # * Добавлена поддержка 2-х дополнительных аргументов и проверка их наличия
@@ -17,13 +20,18 @@
 # Slaves *must* have reporting enabled in their my.cnf
 # example:
 # 	[mysqld]
-# 	report-host     = 172.16.0.63
+# 	report-host     = sql1.lan.net
 # 	report-port     = 3306
-
+# 
+# For Nagios support:
+# Report-host variable *MUST* be equal to host_name variable in Nagios monitoring system
+# Set nagios_support=1
 
 #########################
 # User Defined Variables
 #########################
+
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 MYSQL_HOST="localhost"	# The MASTER database IP
 MYSQL_PORT="$2"		# The MASTER database PORT
@@ -32,11 +40,32 @@ MYSQL_PASS="msandbox"
 MYSQL_SOCKET="$3"
 MYSQL_CHECKSUM="test.checksum"	# The database (test) and table (checksum) to store checksum results
 
-# Array of slave IP addresses for exlude from check
+# Array of slave IP addresses for exclude from check
 exclude_slave=()
 
+###
+# Nagios support variables
+# 1 - enable nagios nsca support
+# 0 - disable nagios nsca support
+###
+
+nagios_support=0
+
+# Name of the nagios service
+NAGIOS_SERVICE_NAME="MySQL Checksum Check"
+
+if ((nagios_support));then
+    send_nsca="send_nsca"
+else
+    send_nsca=""
+fi
+
+# Set NSCA host and port
+NSCA_HOST="localhost"
+NSCA_PORT="5667"
+
 # Mandatory commands for this script to work.
-COMMANDS="mysql mk-table-checksum awk"	
+COMMANDS="mysql mk-table-checksum awk $send_nsca"	
 
 ##############
 # Exit Codes
@@ -99,6 +128,32 @@ sanity_checks() {
 	done
 }
 
+###
+# Notify Nagios via send_nsca utility
+# Accepted arguments:
+# $1 - hostname of server in nagios monitoring
+# $2 - nagios plugin exit code (0 - OK, 1 - WARNING, 2 - ERROR, 3 - UNKNOWN)
+# $3 - nagios plugin exit message
+# $NAGIOS_SERVICE_NAME - is name of the service in nagios web interface
+###
+
+
+notify_mon() {
+
+    if [ "$prog_send_nsca" ];then
+
+        echo -e "$1\t$NAGIOS_SERVICE_NAME\t$2\t$3\n" | $prog_send_nsca $NSCA_HOST -p $NSCA_PORT 1>&/dev/null 2>&1
+
+        if [ $? -eq 0 ];then
+            echo "Notification to NSCA succesfully send."
+            return 0
+        else
+            echo "WARNING!!! Notification error occured. Please check NSCA service."
+            return 1
+        fi
+    fi
+
+}
 
 ###
 # Check for inconsistent slaves
@@ -183,9 +238,13 @@ check() {
                 h=$slave_host,P=$slave_port,u=$MYSQL_USER,p=$MYSQL_PASS` || CHECKSUM="not consistent"
 
 		if [ "$CHECKSUM" ]; then
-			echo "Replication Slave ID $slave_id on $slave_host:$slave_port is inconsistent. Requires rebuild"
+			msg="Replication Slave ID $slave_id on $slave_host:$slave_port is inconsistent. Requires rebuild"
+            echo $msg
+            notify_mon $slave_host 1 "$msg"
 		else
-			echo "Replication Slave ID $slave_id on $slave_host:$slave_port is consistent."
+			msg="Replication Slave ID $slave_id on $slave_host:$slave_port is consistent."
+            echo $msg
+            notify_mon $slave_host 0 "$msg"
 		fi
 		let "index = $index + 1"
 	done
