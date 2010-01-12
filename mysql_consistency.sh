@@ -1,7 +1,13 @@
 #!/bin/bash
 
 # Script perform consistency checks on replicated MySQL databases
-# Version: 0.3
+# Version: 0.4 stable
+#
+# v0.4 by (c) Vitaliy Okulov - 12.01.2010 - www.vokulov.ru 
+# * Изменены параметры запуска скрипта mk-table-checksum, теперь используется алгоритм XOR и функция
+# FNV_64. Для поддержки работы скрипта необходимо установить UDF с поддержкой хеш функции FNV. Исходный
+# код UDF доступен по адресу - http://code.google.com/p/maatkit/source/browse/#svn/trunk/udf
+# * Исправлен баг с определением slave серверов для проверки и обработкой списка исключений. 
 #
 # v0.3 by (c) Vitaliy Okulov - 10.01.2010 - www.vokulov.ru 
 # * Добавлена поддержка системы монитринга Nagios с помощью демона NSCA.
@@ -164,8 +170,9 @@ check() {
 	##
 	E_MSG="Problem running '$prog_mk_table_checksum' at the top of check() function"
 
-	$prog_mk_table_checksum --quiet --replicate=$MYSQL_CHECKSUM --create-replicate-table --socket $MYSQL_SOCKET \
-        --empty-replicate-table h=$MYSQL_HOST,P=$MYSQL_PORT,u=$MYSQL_USER,p=$MYSQL_PASS || return $E_DB_PROBLEM
+    $prog_mk_table_checksum --quiet --algorithm BIT_XOR --chunk-size 500000 --nocrc --empty-replicate-table --float-precision 5 \
+    --function FNV_64 --optimize-xor --replicate=$MYSQL_CHECKSUM --sleep-coef=0.3 --socket $MYSQL_SOCKET \
+    h=$MYSQL_HOST,P=$MYSQL_PORT,u=$MYSQL_USER,p=$MYSQL_PASS || return $E_DB_PROBLEM
 
 	SLAVE_LIST=`$prog_mysql --user=$MYSQL_USER --password=$MYSQL_PASS --port=$MYSQL_PORT --socket=$MYSQL_SOCKET -e "SHOW SLAVE HOSTS\G"`
 
@@ -234,7 +241,7 @@ check() {
 		slave_host=${slave_hosts[$index]}
 		slave_port=${slave_ports[$index]}
 
-		CHECKSUM=`$prog_mk_table_checksum --replicate=$MYSQL_CHECKSUM --replicate-check 2 \
+		CHECKSUM=`$prog_mk_table_checksum --replicate=$MYSQL_CHECKSUM --replicate-check 2 --recursion-method hosts \
                 h=$slave_host,P=$slave_port,u=$MYSQL_USER,p=$MYSQL_PASS` || CHECKSUM="not consistent"
 
 		if [ "$CHECKSUM" ]; then
