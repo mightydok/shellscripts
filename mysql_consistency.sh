@@ -47,7 +47,8 @@ MYSQL_SOCKET="$3"
 MYSQL_CHECKSUM="test.checksum"	# The database (test) and table (checksum) to store checksum results
 
 # Array of slave IP addresses for exclude from check
-exclude_slave=()
+# Sample: "|node1|node2|node3"
+exclude_slave=""
 
 ###
 # Nagios support variables
@@ -174,7 +175,7 @@ check() {
     --function FNV_64 --optimize-xor --replicate=$MYSQL_CHECKSUM --sleep-coef=0.3 --socket $MYSQL_SOCKET \
     h=$MYSQL_HOST,P=$MYSQL_PORT,u=$MYSQL_USER,p=$MYSQL_PASS || return $E_DB_PROBLEM
 
-	SLAVE_LIST=`$prog_mysql --user=$MYSQL_USER --password=$MYSQL_PASS --port=$MYSQL_PORT --socket=$MYSQL_SOCKET -e "SHOW SLAVE HOSTS\G"`
+	SLAVE_LIST=`$prog_mysql --user=$MYSQL_USER --password=$MYSQL_PASS --port=$MYSQL_PORT --socket=$MYSQL_SOCKET -e "SHOW SLAVE HOSTS"`
 
 	##
 	# Create arrays for the slave ids, hosts, ports
@@ -185,40 +186,9 @@ check() {
 	# slave_ports=(3306 3306 3306)
 	#
 	##
-	slave_ids=(`echo "$SLAVE_LIST" | grep "Server_id" | $prog_awk -F ": " '{ print $2 }'`)
-	slave_hosts=(`echo "$SLAVE_LIST" | grep "Host" | $prog_awk -F ": " '{ print $2 }'`)
-	slave_ports=(`echo "$SLAVE_LIST" | grep "Port" | $prog_awk -F ": " '{ print $2 }'`)
-	ids4delete=()
-
-
-    ##
-    # Check slave_* arrays for exclude slave IP addresses
-    ##
-
-    for excl in ${exclude_slave[@]}
-    do
-        for (( i = 0 ; i < ${#slave_hosts[@]} ; i++ ))
-        do
-            if [ "$excl" == "${slave_hosts[$i]}" ]; then
-                echo "Found IP: $excl from exclude list, with ID: $i"
-                ids4delete[${#ids4delete[*]}]="$i"
-                break
-            fi
-        done
-    done
-
-    ##
-    # Delete values from slave_* arrays if there is any data in ids4delete array
-    ##
-
-    for ids in ${ids4delete[@]}
-    do
-        unset slave_ids[$ids]
-        unset slave_hosts[$ids]
-        unset slave_ports[$ids]
-        echo "Delete SLAVE server with ID: $ids from all arrays"
-    done
-    unset ids4delete
+	slave_ids=(`echo "$SLAVE_LIST" | grep -Ev "Server$exclude_slave" | awk '{ORS = " "} {print $1}'`)
+	slave_hosts=(`echo "$SLAVE_LIST" | grep -Ev "Server$exclude_slave" | awk '{ORS = " "} {print $2}'`)
+	slave_ports=(`echo "$SLAVE_LIST" | grep -Ev "Server$exclude_slave" | awk '{ORS = " "} {print $3}'`)
 
 	##
 	# Define the number of slaves by the number of entries in the slave_ids[] array
@@ -241,7 +211,7 @@ check() {
 		slave_host=${slave_hosts[$index]}
 		slave_port=${slave_ports[$index]}
 
-		CHECKSUM=`$prog_mk_table_checksum --replicate=$MYSQL_CHECKSUM --replicate-check 2 --recursion-method hosts \
+		CHECKSUM=`$prog_mk_table_checksum --replicate=$MYSQL_CHECKSUM --replicate-check 0 --recursion-method hosts \
                 h=$slave_host,P=$slave_port,u=$MYSQL_USER,p=$MYSQL_PASS` || CHECKSUM="not consistent"
 
 		if [ "$CHECKSUM" ]; then
