@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # Script perform consistency checks on replicated MySQL databases
-# Version: 0.4 stable
+# Version: 0.5 stable
+#
+# v0.5 by (c) Vitaliy Okulov - 14.03.2010 - www.vokulov.ru 
+# * Добавлена проверка наличия функции FNV_64 для корректной работы mk-table-checksum
 #
 # v0.4 by (c) Vitaliy Okulov - 12.01.2010 - www.vokulov.ru 
 # * Изменены параметры запуска скрипта mk-table-checksum, теперь используется алгоритм XOR и функция
@@ -55,11 +58,18 @@ exclude_slave=""
 # 1 - enable nagios nsca support
 # 0 - disable nagios nsca support
 ###
-
 nagios_support=0
 
 # Name of the nagios service
 NAGIOS_SERVICE_NAME="MySQL Checksum Check"
+
+# Set NSCA host and port
+NSCA_HOST="localhost"
+NSCA_PORT="5667"
+
+##########################
+##########################
+##########################
 
 if ((nagios_support));then
     send_nsca="send_nsca"
@@ -67,12 +77,8 @@ else
     send_nsca=""
 fi
 
-# Set NSCA host and port
-NSCA_HOST="localhost"
-NSCA_PORT="5667"
-
 # Mandatory commands for this script to work.
-COMMANDS="mysql mk-table-checksum awk $send_nsca"	
+COMMANDS="mysql mk-table-checksum awk mk-table-sync $send_nsca"	
 
 ##############
 # Exit Codes
@@ -89,6 +95,7 @@ E_DB_PROBLEM=68
 
 error() {
         E_CODE=$?
+        echo $E_CODE
         echo "Exiting: ERROR ${E_CODE}: $E_MSG"
 
         exit $E_CODE   
@@ -160,6 +167,17 @@ notify_mon() {
         fi
     fi
 
+}
+
+# Check for FNV_64 function in mysql
+check_fnv() {
+
+    out=`$prog_mysql --user=$MYSQL_USER --password=$MYSQL_PASS --port=$MYSQL_PORT --socket=$MYSQL_SOCKET -e 'select FNV_64(1234567890);'`
+
+    E_MSG="Plase install FNV_64 function"
+
+    echo $out | grep -q 'FUNCTION FNV_64 does not exist' || return $E_DB_PROBLEM
+    echo $out | grep -q '7937388694469814499' || return $E_DB_PROBLEM
 }
 
 ###
@@ -247,6 +265,7 @@ if sanity_checks; then
 
 	if [ $arg_c ]; then
 		echo "Checking consistency"
+        check_fnv || error
 		check || error
 	else
 		usage
