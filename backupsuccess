@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Old backup remove script for mylvmbackup
+# v 1.0
+#
+# BPATH - path where backup files stored
+# RTND - retention files, how many backup files will NOT be removed
+
+BPATH="/var/cache/mylvmbackup/backup/"
+RTNF=3
+
+function delete_old_files {
+        find $1 -type f -name "backup-*_mysql.tar.gz" \
+             | sort | head -n -$2 \
+             | xargs --no-run-if-empty rm -f
+
+
+        if [ $? -ne 0 ];then
+                echo "Something wrong..."
+                exit 1
+        fi
+}
+
+
+if [ -d "$BPATH" ]; then
+        delete_old_files $BPATH $RTNF
+else
+        echo "Cant access backup directory."
+        exit 1
+fi
+
+exit 0
