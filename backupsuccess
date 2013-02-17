@@ -4,7 +4,7 @@
 # v 1.0
 #
 # BPATH - path where backup files stored
-# RTND - retention files, how many backup files will NOT be removed
+# RTNF - retention files, how many backup files will NOT be removed
 
 BPATH="/var/cache/mylvmbackup/backup/"
 RTNF=3
