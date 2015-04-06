@@ -5,4 +5,4 @@
 backupsuccess - скрипт (hook) удаления старых файлов архивов для программы mylvmbackup 
 contribup.sh - скрипт для обновления проекта на базе CMS Drupal.
 mysql_consistency.sh - скрипт для проверки консистентности slave MySQL серверов при использовании репликации.
-
+backupvm2.sh - скрипт для запаковки lxc контейнеров при помощи dar
