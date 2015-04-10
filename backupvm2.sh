@@ -15,7 +15,7 @@ CURRDATE=$(date +%Y%m%d)
 # Set number of FULL backup for each VM in VMLIST that we want to keep in BACKUPDIR
 RTNF=5
 # Set args vor dar backup tool
-DARARGSFULL="-D -Q -v -z 5"
+DARARGSFULL="-D -Q -z 5"
 DARARGSDIFF=$DARARGSFULL" -A"
 # Choose: btrfs or lvm
 FS="btrfs"
