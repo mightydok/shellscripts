@@ -87,6 +87,7 @@ function check_archive_file	{
 	VM=$1
 	TYPE=$2
 
+	# Lets find archive with current date name, or dar will rise error if archive already exist
 	BACKUP=$(ls $BACKUPDIR | sort | grep $VM | grep $TYPE | grep $CURRDATE)
 
 	if [ "$BACKUP" != "" ];then
@@ -103,8 +104,8 @@ function create_archive		{
 	VM=$1
 	TYPE=$2
 
+	# Lets create FULL type of archive
 	if [ "$TYPE" == "FULL" ];then
-
 		cd $LXCDIR/snap/ && \
 			 dar $DARARGSFULL -c $BACKUPDIR/$VM"_"$CURRDATE"_"$TYPE -P $VM$EXCLUDEDIR
 			 return $?
@@ -113,6 +114,7 @@ function create_archive		{
 		TYPE="DIFF"
 		# Lets find lastt FULL backup
 		LASTFULL=$(ls $BACKUPDIR | sort | grep $VM | grep "FULL" | tail -n 1 | cut -d "." -f 1)
+		# Dar need name of last full backup without slice name and extension
 		DATEOFFULLBACKUP=$(echo $LASTFULL | cut -d "_" -f 2)
 
 		if [ "$LASTFULL" != "" ];then
@@ -132,10 +134,13 @@ function delete_old_archives    {
 
 	cd $BACKUPDIR
 
+	# Create reverse ordered array of all FULL archives for that VM
 	FULL=($(ls -r | grep $VM | grep "FULL"))
+	# Count size of array
 	FULLNUM=${#FULL[*]}
 
 	if [ $FULLNUM -gt $RTNF ];then
+		# Slice array for more than RTNF number of FULL archives, and remove FULL and DIFF archives with that date
 		for OLDARCH in ${FULL[*]:$RTNF};do
 			FULLDATE=$(echo $OLDARCH | cut -d "_" -f 2)
         		# Keep  last $RTNF files in backp directory
