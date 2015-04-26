@@ -26,11 +26,8 @@ DEV=1
 
 function check_tools		{
 	# Lets find btrfs tools binary file
-	if [ $FS == "btrfs" ] && [ -f "/sbin/btrfs" ];then
+	if [ "$FS" == "btrfs" ] && [ -f "/sbin/btrfs" ];then
 		echo "Btrfs tool binary was found"
-	else
-                echo "You choose BTRFS fs, but btrfs tools are not installed"
-		exit 1
 	fi
 
 	# Lets check for dar backup tool
@@ -42,7 +39,7 @@ function check_tools		{
 	fi
 
 	# Lets check lvcreate tool
-	if [ -f "/sbin/lvcreate" ];then
+	if [ "$FS" == "lvm" ] && [ -f "/sbin/lvcreate" ];then
 		echo "lvcreate binary was found"
 	else
 		 echo "Please install lvm"
@@ -75,7 +72,7 @@ function create_snapshot	{
 	if [ $DEV -eq 0 ] && [ $FS == "lvm" ];then
 		# Lets check for old lvm snapshots
 		SNAPSHOT=$(lvdisplay | grep $LVMDISK"_snap")
-		if [ "$SNAPSHOT" != "" ]
+		if [ "$SNAPSHOT" != "" ];then
 			echo "Snapshot for $VM already created, please check LVM snapshot"
 			exit 1
 		fi
@@ -83,7 +80,7 @@ function create_snapshot	{
 		# Lets create shapshot
 		# Freeze VM
 		lxc-freeze -n $VM || \
-			{ echo "Cant freeze $VM"; exit 1 }
+			{ echo "Cant freeze $VM"; exit 1; }
 		# Create LVM snapshot
 		lvcreate -L 5G -n $LVMDISK"_snap" -s $LVMDISK || \
 	                 { lxc-unfreeze -n $VM; echo "Snapshot of $VM VM failed"; \
@@ -96,7 +93,8 @@ function create_snapshot	{
                 # Mount LVM to SNAPSHOT directory
 		mount $LVMDISK"_snap" $LXCDIR/snap/ || \
 				{ echo "Cant mount LVM snapshot to snap folder"; exit 1; } 
-		# Lets sync fs state
+
+		# Lets sycn fs state
 		sync
 		sleep 3
 	fi
@@ -125,7 +123,7 @@ function delete_snapshot	{
 	if [ $DEV -eq 0 ] && [ $FS == "lvm" ];then
 		# Lets check for snapshot
 		SNAPSHOT=$(lvdisplay | grep $LVMDISK"_snap")
-		if [ "$SNAPSHOT" != "" ]
+		if [ "$SNAPSHOT" != "" ];then
 			echo "Found snapshot for $VM, lets try to delete it"
 			# Lets umount snapshot
 			umount $LXCDIR/snap/
