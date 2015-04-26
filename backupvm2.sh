@@ -1,8 +1,9 @@
 #!/bin/bash
-#  v 0.1
+#  v 0.2
 # Author: vitaliy.okulov@gmail.com
 # Web: http://vokulov.ru
 # License: GPL
+# TODO: Rewrite check_tool, create_snapshot, delete_snapshot functions
 
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/comcom
 
@@ -18,9 +19,10 @@ RTNF=5
 DARARGSFULL="-D -Q -z 5"
 DARARGSDIFF=$DARARGSFULL" -A"
 # Choose: btrfs or lvm
-FS="btrfs"
+FS="lvm"
+LVMDISK="/dev/VG0/LV0"
 # Set if u dont have btrfs or lvm partition
-DEV=0
+DEV=1
 
 function check_tools		{
 	# Lets find btrfs tools binary file
@@ -37,6 +39,14 @@ function check_tools		{
 	else
 		echo "Please install dar backup tool"
 		exit 1
+	fi
+
+	# Lets check lvcreate tool
+	if [ -f "/sbin/lvcreate" ];then
+		echo "lvcreate binary was found"
+	else
+		 echo "Please install lvm"
+		 exit 1
 	fi
 
 	return 0
@@ -60,6 +70,36 @@ function create_snapshot	{
 			{ echo "Snapshot of $VM VM failed"; \
 				exit 1; }
 	fi
+
+	# Check if $DEV flag is off and we use lvcreate tool to create snapshot
+	if [ $DEV -eq 0 ] && [ $FS == "lvm" ];then
+		# Lets check for old lvm snapshots
+		SNAPSHOT=$(lvdisplay | grep $LVMDISK"_snap")
+		if [ "$SNAPSHOT" != "" ]
+			echo "Snapshot for $VM already created, please check LVM snapshot"
+			exit 1
+		fi
+
+		# Lets create shapshot
+		# Freeze VM
+		lxc-freeze -n $VM || \
+			{ echo "Cant freeze $VM"; exit 1 }
+		# Create LVM snapshot
+		lvcreate -L 5G -n $LVMDISK"_snap" -s $LVMDISK || \
+	                 { lxc-unfreeze -n $VM; echo "Snapshot of $VM VM failed"; \
+	                         exit 1; }
+
+		# Unfreeze VM
+		lxc-unfreeze -n $VM || \
+			{ echo "Lets try to unfreeze $VM second time"; lxc-unfreeze -n $VM; }
+
+                # Mount LVM to SNAPSHOT directory
+		mount $LVMDISK"_snap" $LXCDIR/snap/ || \
+				{ echo "Cant mount LVM snapshot to snap folder"; exit 1; } 
+		# Lets sync fs state
+		sync
+		sleep 3
+	fi
 }
 
 function delete_snapshot	{
@@ -77,6 +117,24 @@ function delete_snapshot	{
 					exit 1; }
 		else
 			echo "Strange, but $VM snapshot directory not found, please check snapshot directory"
+			exit 1
+		fi
+	fi
+
+	# Check LVM snapshot
+	if [ $DEV -eq 0 ] && [ $FS == "lvm" ];then
+		# Lets check for snapshot
+		SNAPSHOT=$(lvdisplay | grep $LVMDISK"_snap")
+		if [ "$SNAPSHOT" != "" ]
+			echo "Found snapshot for $VM, lets try to delete it"
+			# Lets umount snapshot
+			umount $LXCDIR/snap/
+			# Remove snapshot
+			lvremove -f $LVMDISK"_snap" || \
+			        { echo "Cant delete snapshot for $VM"; \
+			                exit 1; }
+		else
+			echo "Strange, but $VM snapshot not found, please check LVM"
 			exit 1
 		fi
 	fi
@@ -119,7 +177,7 @@ function create_archive		{
 
 		if [ "$LASTFULL" != "" ];then
 			 cd $LXCDIR/snap/ && \
-			 	dar $DARARGSDIFF $BACKUPDIR/$LASTFULL -c $BACKUPDIR/$VM"_"$CURRDATE"_"$TYPE"BACKUPFOR"_$DATEOFFULLBACKUP -P $VM$EXCLUDEDIR
+			 	dar $DARARGSDIFF $BACKUPDIR/$LASTFULL -c $BACKUPDIR/$VM"_"$CURRDATE"_"$TYPE"BACKUPFOR_"$DATEOFFULLBACKUP -P $VM$EXCLUDEDIR
 		 		return $?
 		else
 			echo "Cant find last FULL backup for $VM. Please run FULL backup first"
